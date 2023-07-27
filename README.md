@@ -11,6 +11,7 @@ Before running the script, first open it in a text editor and set the settings a
 - `username`: Replace `your-username-here` with the username of the reddit user you want to archive.
 - `delay`: This is the delay between requests, it can be left at the default vaule of 5 seconds.
 - `delay_after_rate_limit`: This determines how long the script will wait if it encounters a rate-limit error. This should also be fine at the default value of 600 seconds (10 minutes).
+- `rate_limit_retry_limit`: How many times to retry a request if the previous one was rate-limited. Set to `-1` to infinitely retry.
 - `duplicate_posts`: Change this value to `True` if you want to save your posts which also have at least one comment from you in both the posts and comments folder or leave it at `False` to only save them in the posts folder (This only has any effects when both posts and comments are being archived).
 
 Underneath the main settings are a few options for what to archive:
