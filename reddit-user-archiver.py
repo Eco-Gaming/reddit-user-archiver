@@ -7,6 +7,7 @@ import json
 username = "your-username-here" # reddit username
 delay = 5 # delay between requests (in seconds)
 delay_after_rate_limit = 600 # time to wait before next request if rate-limit is encountered (in seconds)
+rate_limit_retry_limit = 5 # how many times to retry request after being rate-limited, set this to -1 to infinitely retry
 duplicate_posts = False # save users posts that also have users comments in posts and comments folder?
 
 save_posts = True
@@ -19,7 +20,6 @@ headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/
 # headers = {'User-Agent': 'Mozilla/5.0 (Linux; Android 11; SAMSUNG SM-G973U) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/14.2 Chrome/87.0.4280.141 Mobile Safari/537.36'}
 urls = set() # Set to store post URLs and check for duplicates (useful for comment archiving)
 failed_urls = [] # downloads that failed once
-retry_fail_urls = [] # downloads that failed twice
 
 
 def create_folder_if_not_exists(folder_path):
@@ -47,7 +47,7 @@ def save_post_as_json(post_data_json, folder_path, filename):
                 break
             i += 1
 
-def save_post(post_url, base_folder, subreddit, delay):
+def save_post(post_url, base_folder, subreddit, delay, retry=0):
     folder_path = os.path.join(base_folder, subreddit)
     create_folder_if_not_exists(folder_path)
 
@@ -72,10 +72,13 @@ def save_post(post_url, base_folder, subreddit, delay):
             print(f"'{title}' from {subreddit} saved successfully!")
             return True
         else:
-            if post_response.status_code == 429:
+            if post_response.status_code == 429 and (retry < rate_limit_retry_limit or rate_limit_retry_limit == -1):
                 print(f"You are being rate-limited (Response Code 429). Waiting {delay_after_rate_limit} seconds before continuing...")
                 time.sleep(delay_after_rate_limit)
-                return save_post(post_url, base_folder, subreddit, delay)
+                return save_post(post_url, base_folder, subreddit, delay, retry+1)
+
+            elif post_response.status_code == 429:
+                print(f"The previous request failed due to rate-limiting, it will be retried later (max retries reached).")
             else:
                 print(f"Failed to fetch post details. Response Code: {post_response.status_code}")
     except requests.RequestException as e:
@@ -83,26 +86,29 @@ def save_post(post_url, base_folder, subreddit, delay):
 
     return False
 
-def retry_failed_downloads():
+def retry_failed_downloads(failed_downloads):
     print("Retrying failed downloads...")
-    for post_url, base_folder, subreddit, delay in failed_urls:
+    retry_fail_downloads = []
+    for post_url, base_folder, subreddit, delay in failed_downloads:
         if not save_post(post_url, base_folder, subreddit, delay):
-            retry_fail_urls.append((post_url, base_folder, subreddit, delay))
+            retry_fail_downloads.append((post_url, base_folder, subreddit, delay))
 
-    retry_fail_urls_length = len(retry_fail_urls)
+    retry_fail_downloads_length = len(retry_failed_downloads)
 
-    if retry_fail_urls_length > 0:
-        print(f"{retry_fail_urls_length} downloads failed multiple times. This is very likely due to rate-limiting. Retrying in 30 minutes...")
-        print()
-        failed_urls = retry_fail_urls
-        retry_fail_urls = []
-        time.sleep(1800) # 30 minutes in seconds
+    print(f"The following {retry_fail_downloads_length} download(s) failed:")
+    for post_url, base_folder, subreddit, delay in retry_fail_downloads:
+        print(f"{post_url}")
+
+    print("You can attempt to manually download these by visiting the above links.")
+
+    return retry_fail_downloads
 
 def archive_user_posts(username, delay):
     base_url = f"https://old.reddit.com/user/{username}/submitted.json"
 
     after = None
     terminatable = False
+    retry = 0
 
     print("Archiving posts...")
 
@@ -146,9 +152,12 @@ def archive_user_posts(username, delay):
             else:
                 print("No posts found for the user.")
                 break
-        elif response.status_code == 429:
+        elif response.status_code == 429 and (retry < rate_limit_retry_limit or rate_limit_retry_limit == -1):
             print(f"You are being rate-limited (Response Code 429). Waiting {delay_after_rate_limit} seconds before continuing...")
             time.sleep(delay_after_rate_limit-delay)
+        elif response.status_code == 429:
+            print(f"The previous request failed due to rate-limiting. Aborting... (max retries reached).")
+            break
         else:
             print(f"Failed to fetch data. Response Code: {response.status_code}. Please check the username and try again.")
             break
@@ -161,6 +170,7 @@ def archive_user_comments(username, delay):
 
     after = None
     terminatable = False
+    retry = 0
 
     print("Archiving comments...")
 
@@ -204,9 +214,12 @@ def archive_user_comments(username, delay):
             else:
                 print("No comments found for the user.")
                 break
-        elif response.status_code == 429:
+        elif response.status_code == 429 and (retry < rate_limit_retry_limit or rate_limit_retry_limit == -1):
             print(f"You are being rate-limited (Response Code 429). Waiting {delay_after_rate_limit} seconds before continuing...")
             time.sleep(delay_after_rate_limit-delay)
+        elif response.status_code == 429:
+            print(f"The previous request failed due to rate-limiting. Aborting... (max retries reached).")
+            break
         else:
             print(f"Failed to fetch data. Response Code: {response.status_code}. Please check the username and try again.")
             break
@@ -219,4 +232,4 @@ if __name__ == "__main__":
         archive_user_comments(username, delay)
         print()
 
-    # retry_failed_downloads() # TODO: currently broken: UnboundLocalError: local variable 'failed_urls' referenced before assignment
+    retry_failed_downloads(failed_urls)
