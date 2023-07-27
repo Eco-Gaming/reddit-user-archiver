@@ -2,6 +2,8 @@
 
 This is a tool created to easily archive a Reddit user's posts and comments in JSON format. It leverages Reddit's JSON data feeds to collect the data, producing JSON files that are identical to the ones provided by Reddit directly (for example: https://www.reddit.com/r/MuseumOfReddit/comments/ke8skw/the_poop_knife.json). It will not download any media files.
 
+The archived json files can be viewed by modifying reddit json readers such as [geddit-app](https://github.com/kaangiray26/geddit-app) to accept local files. (There are probably more, I didn't look around yet).
+
 Note: The majority of the code snippets in this project are adapted from ChatGPT.
 
 ## Usage
