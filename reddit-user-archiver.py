@@ -3,15 +3,6 @@ import requests
 import time
 import json
 
-# TODO:
-# - code cleanup
-# . option whether to save deleted posts
-# - continue from local files without re-downloading everything
-# - add third delay option for double failed downloads
-# - save media
-# - add auth
-# - add saving of saved posts and comments
-
 # Settings
 username = "your-username-here" # reddit username
 delay = 5 # delay between requests (in seconds)
