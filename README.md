@@ -30,8 +30,10 @@ python reddit-user-archiver.py
 The script will start archiving the user's posts and comments. The data will be stored in separate JSON files, organized by subreddit, within the posts and comments folders.
 
 ## Roadmap
-- code cleanup
-- change handling of failed downloads
+
+Please note that the following tasks are listed in no specific order, and it is unlikely that I will work on them in the immediate future.
+
+- code cleanup (move posts and comments into same method)
 - option whether to save deleted posts
 - continue from local files without re-downloading everything
 - save media
