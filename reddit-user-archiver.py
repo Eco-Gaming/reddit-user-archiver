@@ -1,5 +1,6 @@
 import os
 import requests
+from requests.models import PreparedRequest
 import time
 import json
 
@@ -10,10 +11,12 @@ delay_after_rate_limit = 600 # time to wait before next request if rate-limit is
 rate_limit_retry_limit = 5 # how many times to retry request after being rate-limited, set this to -1 to infinitely retry
 duplicate_posts = False # save users posts that also have users comments in posts and comments folder?
 
-save_posts = True
-save_comments = True
+save_posts = False
+save_comments = False
 save_saved_posts = False
-save_saved_comments = False
+save_saved_comments = True
+
+cookie = "" # insert your reddit_session cookie here, see the README on how to obtain it
 
 # Other variables (these do not have to be changed)
 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36'}
@@ -26,13 +29,13 @@ def create_folder_if_not_exists(folder_path):
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
-def save_post_as_json(post_data_json, folder_path, filename):
+def save_as_json(data_json, folder_path, filename):
     file_path = os.path.join(folder_path, filename)
 
     if not os.path.exists(file_path):
         # File does not exist, so save the data with the original filename
         with open(file_path, 'w') as f:
-            json.dump(post_data_json, f, indent=4)
+            json.dump(data_json, f, indent=4)
     else:
         # File with the same name already exists, find a new filename
         base_name, extension = os.path.splitext(filename)
@@ -43,7 +46,7 @@ def save_post_as_json(post_data_json, folder_path, filename):
             if not os.path.exists(new_file_path):
                 # Save the data with the new filename
                 with open(new_file_path, 'w') as f:
-                    json.dump(post_data_json, f, indent=4)
+                    json.dump(data_json, f, indent=4)
                 break
             i += 1
 
@@ -68,7 +71,7 @@ def save_post(post_url, base_folder, subreddit, delay, retry=0):
             # Remove any characters that are not allowed in filenames
             post_filename = ''.join(c if c.isalnum() else '_' for c in post_filename)
             post_filename += ".json"
-            save_post_as_json(post_data, folder_path, post_filename)
+            save_as_json(post_data, folder_path, post_filename)
             print(f"'{title}' from {subreddit} saved successfully!")
             return True
         else:
@@ -86,6 +89,34 @@ def save_post(post_url, base_folder, subreddit, delay, retry=0):
 
     return False
 
+def save_comment(comment_json, base_folder):
+    comment_data = comment_json['data']
+    subreddit = comment_data['subreddit']
+    folder_path = os.path.join(base_folder, subreddit)
+    create_folder_if_not_exists(folder_path)
+
+    post_title = comment_data['link_title']
+    post_author = comment_data['link_author']
+    comment_author = comment_data['author']
+    comment_body = comment_data['body']
+
+    if len(post_title) > 50:
+        comment_filename = f"{post_author}_{post_title[0:50]}"
+    else:
+        comment_filename = f"{post_author}_{post_title}"
+    if len(comment_body) > 20:
+        comment_filename += f"-comment-{comment_author}_{comment_body[0:20]}"
+    else:
+        comment_filename += f"-comment-{comment_author}_{comment_body}"
+
+    # Remove any characters that are not allowed in filenames
+    comment_filename = ''.join(c if c.isalnum() else '_' for c in comment_filename)
+    comment_filename += ".json"
+
+    save_as_json(comment_json, folder_path, comment_filename)
+
+    print(f"-> comment by {comment_author} saved: {comment_body[0:50]}...")
+
 def retry_failed_downloads(failed_downloads):
     print("Retrying failed downloads...")
     retry_fail_downloads = []
@@ -93,7 +124,7 @@ def retry_failed_downloads(failed_downloads):
         if not save_post(post_url, base_folder, subreddit, delay):
             retry_fail_downloads.append((post_url, base_folder, subreddit, delay))
 
-    retry_fail_downloads_length = len(retry_failed_downloads)
+    retry_fail_downloads_length = len(retry_fail_downloads)
 
     print(f"The following {retry_fail_downloads_length} download(s) failed:")
     for post_url, base_folder, subreddit, delay in retry_fail_downloads:
@@ -224,6 +255,139 @@ def archive_user_comments(username, delay):
             print(f"Failed to fetch data. Response Code: {response.status_code}. Please check the username and try again.")
             break
 
+def archive_user_saved_posts(username, cookie, delay):
+    base_url = f"https://old.reddit.com/user/{username}/saved.json"
+
+    cookie_headers = headers
+    cookie_headers['Cookie'] = f'reddit_session={cookie}'
+
+    after = None
+    terminatable = False
+    retry = 0
+
+    print("Archiving saved posts...")
+
+    while True:
+        url = base_url
+
+        if after:
+            url = f"{base_url}?after={after}"
+            terminatable = True
+
+            # Introduce a delay between requests to avoid rate-limiting
+            time.sleep(delay)
+
+        elif terminatable:
+            print("All saved posts archived.")
+            break
+
+        response = requests.get(url, headers=cookie_headers)
+
+        if response.status_code == 200:
+            data = response.json()
+            if 'data' in data and 'children' in data['data']:
+                posts = data['data']['children']
+                if not posts:
+                    print("No more posts to fetch.")
+                    break
+
+                for post in posts:
+                    if post['kind'] != 't3':
+                        continue
+                    post_data = post['data']
+                    subreddit = post_data['subreddit']
+                    post_permalink = post_data['permalink']
+                    post_url = f"https://old.reddit.com{post_permalink}.json"
+
+                    if post_url not in urls:
+                        if save_post(post_url, "saved/posts", subreddit, delay):
+                            urls.add(post_url)
+                        else:
+                            failed_urls.append((post_url, "saved/posts", subreddit, delay))
+
+                after = data['data']['after']
+            else:
+                print("No saved posts found for the user.")
+                break
+        elif response.status_code == 429 and (retry < rate_limit_retry_limit or rate_limit_retry_limit == -1):
+            print(f"You are being rate-limited (Response Code 429). Waiting {delay_after_rate_limit} seconds before continuing...")
+            time.sleep(delay_after_rate_limit-delay)
+        elif response.status_code == 429:
+            print(f"The previous request failed due to rate-limiting. Aborting... (max retries reached).")
+            break
+        else:
+            print(f"Failed to fetch data. Response Code: {response.status_code}. Please check the username and try again.")
+            break
+
+def archive_user_saved_comments(username, cookie, delay):
+    base_url = f"https://old.reddit.com/user/{username}/saved.json"
+
+    cookie_headers = headers
+    cookie_headers['Cookie'] = f'reddit_session={cookie}'
+
+    if duplicate_posts:
+        urls.clear()
+
+    after = None
+    terminatable = False
+    retry = 0
+
+    print("Archiving saved comments...")
+
+    while True:
+        url = base_url
+
+        if after:
+            url = f"{base_url}?after={after}"
+            terminatable = True
+
+            # Introduce a delay between requests to avoid rate-limiting
+            time.sleep(delay)
+
+        elif terminatable:
+            print("All saved comments archived.")
+            break
+
+        response = requests.get(url, headers=cookie_headers)
+
+        if response.status_code == 200:
+            data = response.json()
+            if 'data' in data and 'children' in data['data']:
+                comments = data['data']['children']
+                if not comments:
+                    print("No more posts to fetch.")
+                    break
+
+                for comment in comments:
+                    if comment['kind'] != 't1':
+                        continue
+                    comment_data = comment['data']
+                    link_permalink = comment_data['link_permalink']
+                    comment_url = f"{link_permalink}.json"
+                    subreddit = comment_data['subreddit']
+
+                    if comment_url not in urls:
+                        if save_post(comment_url, "saved/comments", subreddit, delay):
+                            urls.add(comment_url)
+                        else:
+                            failed_urls.append((comment_url, "saved/comments", subreddit, delay))
+
+                    save_comment(comment, "saved/comments")
+
+                after = data['data']['after']
+            else:
+                print("No saved posts found for the user.")
+                break
+        elif response.status_code == 429 and (retry < rate_limit_retry_limit or rate_limit_retry_limit == -1):
+            print(f"You are being rate-limited (Response Code 429). Waiting {delay_after_rate_limit} seconds before continuing...")
+            time.sleep(delay_after_rate_limit-delay)
+        elif response.status_code == 429:
+            print(f"The previous request failed due to rate-limiting. Aborting... (max retries reached).")
+            break
+        else:
+            print(f"Failed to fetch data. Response Code: {response.status_code}. Please check the username and try again.")
+            break
+
 if __name__ == "__main__":
     if save_posts:
         archive_user_posts(username, delay)
@@ -232,4 +396,14 @@ if __name__ == "__main__":
         archive_user_comments(username, delay)
         print()
 
-    retry_failed_downloads(failed_urls)
+    urls.clear()
+
+    if save_saved_posts:
+        archive_user_saved_posts(username, cookie, delay)
+        print()
+    if save_saved_comments:
+        archive_user_saved_comments(username, cookie, delay)
+        print()
+
+    if len(failed_urls) > 0:
+        retry_failed_downloads(failed_urls)
