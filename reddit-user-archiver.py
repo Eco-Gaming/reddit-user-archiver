@@ -1,6 +1,5 @@
 import os
 import requests
-from requests.models import PreparedRequest
 import time
 import json
 
@@ -11,10 +10,10 @@ delay_after_rate_limit = 600 # time to wait before next request if rate-limit is
 rate_limit_retry_limit = 5 # how many times to retry request after being rate-limited, set this to -1 to infinitely retry
 duplicate_posts = False # save users posts that also have users comments in posts and comments folder?
 
-save_posts = False
-save_comments = False
+save_posts = True
+save_comments = True
 save_saved_posts = False
-save_saved_comments = True
+save_saved_comments = False
 
 cookie = "" # insert your reddit_session cookie here, see the README on how to obtain it
 
