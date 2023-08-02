@@ -36,7 +36,8 @@ To access saved posts and comments, you will have to obtain a cookie of your Red
 3. In the developer tools panel, navigate to the "Network" tab. This tab will show all the network requests and responses made by the webpage.
 4. Now, go to the [json of the Reddit homepage](https://www.reddit.com/.json) or any other json Reddit page that uses authentication, such as your user profile or saved posts, by adding `.json` to the end of the URL.
 5. In the network tab, you should see a request with Status 200 and File .json. Click on the request to view its details. In the "Headers" section, look for the "Request Headers" subsection.
-6. In the "Request Headers," find the line that starts with "Cookie." This line contains your session's authentication token (usually named "reddit_session").
+6. In the "Request Headers," find the line that starts with "Cookie". This line contains your session's authentication token (usually named "reddit_session").
+   Example `Cookie` value: `rdt=...; edgebucket=...; token_v2=.........; g_state={...}; reddit_session=YOUR_AUTHENTICATION_TOKEN; eu_cookie={...}; pc=...; session_tracker=......`
 7. Copy the value of reddit_session. It will look something like this: reddit_session=YOUR_AUTHENTICATION_TOKEN. The token's last character is the one before the semicolon.
 8. Now, open the Python script in a text editor again and locate the cookie field in the settings section. Set its value to the authentication token you copied in the previous step. The line should look like this: `cookie = "YOUR_AUTHENTICATION_TOKEN"`
 
