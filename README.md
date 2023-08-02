@@ -57,3 +57,7 @@ Please note that the following tasks are listed in no specific order, and it is 
 - option whether to save deleted posts
 - continue from local files without re-downloading everything
 - save media
+
+## Disclaimer
+
+Your Reddit token is only ever used to directly send requests to Reddit, this script won't do anything else with it. You can also easily verify this by looking for the `cookie` and `cookie_headers` variables in the code.
