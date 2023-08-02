@@ -20,8 +20,25 @@ Underneath the main settings are a few options for what to archive:
 
 - `save_posts`: Whether to save all the specified users posts.
 - `save_comments`: Whether to save all posts that the specified user has commented on.
+- `save_saved_posts`: Whether to save all posts that the specified user has saved. Note: This requires obtaining a cookie and adding it to the `cookie` field below.
+- `save_saved_comments`: Whether to save all comments that the specified user has saved. This also requires a `cookie`.
 
-The other two options don't work yet, so leave them at `False` (changing them has no effect).
+If you want to archive saved posts and comments, you will have to specify a token for authentification:
+
+- `cookie`: Put your `reddit_session` cookie here to access reddit pages which require authentication. See the below guide on how to obtain it.
+
+### Obtaining your Reddit (session-)token
+
+To access saved posts and comments, you will have to obtain a cookie of your Reddit session. This is only needed if you want to archive saved posts and comments. If you get a 403 error, you are most likely using the wrong token. Make sure to keep this token safe, as anyone who has the token has full access to your Reddit account. If you believe your token has been compromised, logging out of the browser which the token was extracted from *should* invalidate the token.
+
+1. In your web browser, navigate to the Reddit website and log in with your Reddit account credentials if you haven't already done so.
+2. Once logged in, open the developer tools in your web browser. You can usually do this by right-clicking on any part of the webpage and selecting "Inspect" or "Inspect Element". In Firefox they can also be opened by pressing `F12`.
+3. In the developer tools panel, navigate to the "Network" tab. This tab will show all the network requests and responses made by the webpage.
+4. Now, go to the [json of the Reddit homepage](https://www.reddit.com/.json) or any other json Reddit page that uses authentication, such as your user profile or saved posts, by adding `.json` to the end of the URL.
+5. In the network tab, you should see a request with Status 200 and File .json. Click on the request to view its details. In the "Headers" section, look for the "Request Headers" subsection.
+6. In the "Request Headers," find the line that starts with "Cookie." This line contains your session's authentication token (usually named "reddit_session").
+7. Copy the value of reddit_session. It will look something like this: reddit_session=YOUR_AUTHENTICATION_TOKEN. The token's last character is the one before the semicolon.
+8. Now, open the Python script in a text editor again and locate the cookie field in the settings section. Set its value to the authentication token you copied in the previous step. The line should look like this: `cookie = "YOUR_AUTHENTICATION_TOKEN"`
 
 <hr>
 
@@ -39,5 +56,3 @@ Please note that the following tasks are listed in no specific order, and it is 
 - option whether to save deleted posts
 - continue from local files without re-downloading everything
 - save media
-- add auth
-- add saving of saved posts and comments
